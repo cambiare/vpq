@@ -1,4 +1,4 @@
-VPQ: Variable Persistence Queue
+VPQ: Variably Persistent Queue
 
 The problem this is intending to solve is an asynchronous queue that has a 
 maximum size greater than the amount of heap/memory limitation of the queued
