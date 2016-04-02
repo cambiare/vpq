@@ -26,8 +26,9 @@ public class VariablyPersistentQueue<T>
 	
 	private boolean		continueBuffering;
 
-	private LinkedBlockingQueue<T>					queue;
-	private LinkedBlockingQueue<T>					bufferQueue;
+	
+	private LinkedBlockingQueue<T>		queue;
+	private LinkedBlockingQueue<T>		bufferQueue;
 	
 	public VariablyPersistentQueue( )
 	{
