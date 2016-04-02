@@ -1,1 +1,19 @@
-README
+VPQ: Variable Persistence Queue
+
+The problem this is intending to solve is an asynchronous queue that has a 
+maximum size greater than the amount of heap/memory limitation of the queued
+objects.  
+
+An example use case is a request logger that delivers requests data
+to an external system, such as a database or external queue.  Under normal 
+circumstances, the queue will exist in memory as messages are processed out of 
+grow large (respective to system memory limitations and is tunable).  If the 
+dependent external system is unavailable, a normal asynchronous queue would 
+grow until all memory is consumed or messages are thrown out.  With this, 
+messages will continued to be queued into file based persistence which will be 
+drained when the dependent system becomes available again.
+
+The idea is that a request logger allows the request to continue quickly with 
+asynchronous logging, but avoids failures when the dependent system is 
+unavailable.
+
