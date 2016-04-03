@@ -38,15 +38,31 @@ public class TestVPQ
 		vpq.add( "message 11" );
 		vpq.add( "message 12" );
 		
-		try {
-			Thread.sleep( 1000 );
-		} catch (InterruptedException e) {
-			e.printStackTrace();
-		}
+		sleep( 100 );
 		
 		assertTrue( vpq.getSize() == 11 );
 		assertTrue( vpq.getFileBufferSize() == 1 );
 		
+		System.out.println( "SIZE: " + vpq.getSize() );
+		
+		vpq.poll();
+		
+		sleep( 100 );
+		
+		System.out.println( "SIZE: " + vpq.getSize() );
+		
+		assertTrue( vpq.getSize() == 10 );
+		assertTrue( vpq.getFileBufferSize() == 0 );
+		
+	}
+	
+	private void sleep( int msec )
+	{
+		try {
+			Thread.sleep( msec );
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
 	}
 	
 	@After

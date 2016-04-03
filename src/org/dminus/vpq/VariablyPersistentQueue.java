@@ -14,7 +14,7 @@ import org.apache.commons.logging.impl.Log4JLogger;
 
 public class VariablyPersistentQueue<T> 
 {
-	private static final Log4JLogger	logger = new Log4JLogger();
+	private static final Log4JLogger	logger = new Log4JLogger( VariablyPersistentQueue.class.getName() );
 	private static final int			BACKFILL_WAIT = 1000; // 1 sec
 	
 	private String		persistencePath;
@@ -27,14 +27,16 @@ public class VariablyPersistentQueue<T>
 	private boolean		continueBuffering;
 
 	
-	private LinkedBlockingQueue<T>		queue;
-	private LinkedBlockingQueue<T>		bufferQueue;
+	private LinkedBlockingQueue<T>			queue;
+	private LinkedBlockingQueue<T>			bufferQueue;
+	private LinkedBlockingQueue<String>		backfillQueue;
 	
 	public VariablyPersistentQueue( )
 	{
 		size = 0;
 		this.queue = new LinkedBlockingQueue<T>();
 		this.bufferQueue = new LinkedBlockingQueue<T>();
+		this.backfillQueue = new LinkedBlockingQueue<String>();
 		
 		this.firstFile = 0;
 		this.lastFile = 0;
@@ -64,13 +66,17 @@ public class VariablyPersistentQueue<T>
 			bufferQueue.add( obj );
 		}
 		
-		size++;
+		this.size++;
 	}
 	
 	public T poll( )
 	{
 		T obj = queue.poll();
-		size--;
+		logger.debug( "adding to backfill queue" );
+		backfillQueue.add( "dobackfill" );
+		this.size--;
+		
+		logger.debug( "size after poll: " + this.size );
 		
 		return obj;
 	}
@@ -96,8 +102,22 @@ public class VariablyPersistentQueue<T>
 		this.maxInMemoryQueueDepth = maxInMemoryQueueDepth;
 	}
 
+	public void dumpFillBufferQueue( )
+	{
+		firstFile = lastFile = 0;
+		
+		File dir = new File( persistencePath );
+		for( File f : dir.listFiles() )
+		{
+			f.delete();
+		}
+	}
+	
 	class QueueOverrunBufferWatcher implements Runnable
 	{
+		
+		private final Log4JLogger	logger = new Log4JLogger( QueueOverrunBufferWatcher.class.getName() );
+		
 		public void run() 
 		{
 			while( continueBuffering )
@@ -109,6 +129,9 @@ public class VariablyPersistentQueue<T>
 					logger.error( e1 );
 					return;
 				}
+				
+				logger.debug( "buffer queue size: " + bufferQueue.size() );
+				logger.debug( "known file buf size: " + getFileBufferSize() );
 				
 				File f = new File( getPersistencePath() + File.separator + "vpq-buffer-" + lastFile );
 				ObjectOutputStream out;
@@ -126,60 +149,42 @@ public class VariablyPersistentQueue<T>
 		}
 	}
 	
-	public void dumpFillBufferQueue( )
-	{
-		firstFile = lastFile = 0;
-		
-		File dir = new File( persistencePath );
-		for( File f : dir.listFiles() )
-		{
-			f.delete();
-		}
-	}
-	
 	class QueueBufferBackfillWatcher implements Runnable
 	{
+		private final Log4JLogger	logger = new Log4JLogger( QueueBufferBackfillWatcher.class.getName() );
+		
 		public void run() 
 		{
-			while( continueBuffering )
-			{
-				int nBufRemove = maxInMemoryQueueDepth - size;
-				int bufSize = lastFile - firstFile;
-				
-				nBufRemove = ( nBufRemove < bufSize ) ? nBufRemove : bufSize;
-				
-				for( int i=0; i < nBufRemove; i++ )
+			try {
+				while( backfillQueue.poll( 1000, TimeUnit.DAYS ) != null )
 				{
-					int fnum = i + firstFile;
-					File f = new File( persistencePath + File.separator + "vpq-buffer-" + fnum );
-					try {
+					logger.debug( "checking backfill buffer" );
+					
+					if( getFileBufferSize() > 0 )
+					{
+						logger.debug( "removing file buffered message" );
+						
+						int fnum = firstFile;
+						File f = new File( persistencePath + File.separator + "vpq-buffer-" + fnum );
+						
 						ObjectInputStream in = new ObjectInputStream( new FileInputStream( f ) );
 						@SuppressWarnings("unchecked")
 						T obj = (T)in.readObject();
 						in.close();
-						add( obj );
+						queue.add( obj );
 						firstFile++;
-					} catch (FileNotFoundException e) {
-						logger.error( "failed to open buffer file", e );
-					} catch (IOException e) {
-						logger.error( "failed to read buffer file", e );
-					} catch (ClassNotFoundException e) {
-						logger.error( e );
+						
+						logger.debug( "last/first file: " + lastFile + ", " + firstFile );
 					}
 				}
-				
-				if( firstFile == lastFile )
-				{
-					firstFile = 0;
-					lastFile = 0;
-				}
-				
-				try {
-					Thread.sleep( BACKFILL_WAIT );
-				} catch (InterruptedException e) {
-					logger.error( e );
-					continueBuffering = false;
-				}
+			} catch (FileNotFoundException e) {
+				logger.error( e );
+			} catch (ClassNotFoundException e) {
+				logger.error( e );
+			} catch (InterruptedException e) {
+				logger.error( e );
+			} catch (IOException e) {
+				logger.error( e );
 			}
 		}
 	}
